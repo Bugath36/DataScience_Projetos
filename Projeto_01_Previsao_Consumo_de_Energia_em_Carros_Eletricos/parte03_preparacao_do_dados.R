@@ -6,6 +6,7 @@
   # 
     library(dplyr)
     library(kim)
+    library(caret)
 
   # Carregando o Dataset
   
@@ -14,6 +15,12 @@
     dim(dados)
     dados <- dados[, 5:26] 
     dim(dados)
+    str(dados)
+    dados$Freios <- as.factor(dados$Freios)
+    dados$Cambio <- as.factor(dados$Cambio)
+    dados$NumAssentos <- as.factor(dados$NumAssentos)
+    dados$NumeroPortas <- as.factor(dados$NumeroPortas)
+    str(dados)
     View(dados)
     
   # Feature selection
@@ -26,12 +33,13 @@
                    data = dados)
     summary(FeaturesLM)
     
-    # Podemos identificar que Tamanho do Pneu, Autonomia, Capacidade da Bateria
-    # e Cambio são estatisticamente relevantes ao nosso modelo. 
+    # Podemos identificar que Autonomia, Cambio, Distância entre Eixos,
+    # Numero de Assentos, Tamanho do Pneu e Capacidade do porta-malas
+    # são estatisticamente relevantes ao nosso modelo. 
     # Vamos seguir deste ponto para construir nosso modelo base.
     
     # Analisando as Métricas do Modelo Base, verificamos que o Modelo gerou um 
-    # R² = 97,45% e um R² Ajust = 94%, significando que 94% da Variabilidade do
+    # R² = 98,22% e um R² Ajust = 95,45%, significando que 95% da Variabilidade do
     # consumo médio é explicado pelas variáveis que aplicamos.
     # Essa informação pode indicar que nosso modelo está com overfitting, porém para 
     # este momento, apenas queríamos determinar quais variáveis são mais 
@@ -39,37 +47,88 @@
     
     # Porém podemos verificar que os dados estão em diferentes escalas e isso
     # pode prejudicar ou tendenciar o funcionamento dos modelos de regressão 
-    # linear. Vamos experimentar regularizar nossa base de dados e rodar 
+    # linear. Vamos experimentar padronizar nossa base de dados e rodar 
     # novamente um modelo de regressão linear para compararmos os resultados.
     
-    # Aplicando Regularização ao Dataset
+    # Aplicando Padronização ao Dataset
     
-      # Criando um função de normalização
+      # Criando um função de Padronizar
       
-        normalizar <- function(x) {
+        padronizar <- function(x) {
           return ((x - min(x)) / (max(x) - min(x)))
         }
       
-      # Aplicando a Função as Variáveis do Modelo
+      # Primeiramente vamos dividir nosso modelo em dados de treino e teste.
+        
+        separador <- createDataPartition(y = dados$ConsMedio, p = 0.75, 
+                                         list = FALSE)
+        dados_treino <- dados[separador,]
+        dados_teste <- dados[-separador,]
+        
+        str(dados_teste)
+        str(dados_treino)   
       
-        dados_MinMax <- as.data.frame(lapply(dados[-22], normalizar))
-        dados_MinMax <- dados_MinMax %>% cbind(dados$ConsMedio)
-        colnames(dados_MinMax)[22] <- 'ConsMedio'
-        View(dados_MinMax)
-        str(dados_MinMax)
+      # Aplicando a Função aos Dados Treino Numéricos
+      
+        
+        dados_testeNumP <- dados_teste[,!unlist(lapply(dados_teste, 
+                                                      is.factor))]
+        str(dados_testeNumP)
+        
+        dados_testeFac <- dados_teste[, unlist(lapply(dados_teste
+                                                      , is.factor))]
+        str(dados_testeFac)
+        
+        dados_treinoNumP <- dados_treino[,!unlist(lapply(dados_treino, 
+                                                       is.factor))]
+        str(dados_treinoNumP)
+        
+        dados_treinoFac <- dados_treino[, unlist(lapply(dados_treino
+                                                      , is.factor))]
+        str(dados_treinoFac)
+          
+        dados_testeNumP <- as.data.frame(lapply(dados_testeNumP[,-18]
+                                                , padronizar))
+        dados_testeNumP <- cbind(dados_testeNumP, dados_teste$ConsMedio)
+        colnames(dados_testeNumP)[18] <- 'ConsMedio'
+        str(dados_testeNumP)
+        
+        dados_treinoNumP <- as.data.frame(lapply(dados_treinoNumP[, -18],
+                                                 padronizar))
+        dados_treinoNumP <- cbind(dados_treinoNumP, dados_treino$ConsMedio)
+        colnames(dados_treinoNumP)[18] <- 'ConsMedio'
+        str(dados_treinoNumP)
+       
+      # Unificando os Data Frames
+      
+        dados_treino_final <- cbind(dados_treinoNumP, dados_treinoFac)   
+        dados_teste_final <- cbind(dados_testeNumP, dados_testeFac)
+        
+        str(dados_treino_final)
+        str(dados_teste_final)
       
     # Reavaliando as Variáveis de Maior Significância
-      
-      FeaturesLMS <- lm(ConsMedio ~ ., data = dados_MinMax)
+    
+      dados_final <- rbind(dados_treino_final, dados_teste_final)  
+      FeaturesLMS <- lm(ConsMedio ~ ., data = dados_final)
       summary(FeaturesLMS)
       
-      # Temos então exatamente a mesma resposta do algoritmo de regressão linear
-      # sendo assim, vamos manter os dados na mesma escala para continuar com
-      # nosso processo de criação do modelo base.
+      # Temos então uma resposta semelhante de R² ajustado, mas com variáveis
+      # diferentes, sendo assim, vamos admitir as variáveis: CapBat, Autonomia,
+      # DistEixos, CapMax, Cambio e NumAssentos.
     
-    dados_preparados <- dados_MinMax %>% select(Cambio, CapBat, Autonomia, 
-                                         TamPneu, ConsMedio)
-    dados_preparados    
+    dados_prep_teste <- dados_teste_final %>% select(CapBat, Autonomia, DistEixos,
+                                                     CapMax, Cambio, NumAssentos,
+                                                     ConsMedio)
+    str(dados_prep_teste)    
     
-    write.csv2(dados_preparados,file = 'dados/dados_preparados.csv')
+    dados_prep_treino <- dados_treino_final %>% select(CapBat, Autonomia, DistEixos,
+                                                       CapMax, Cambio, NumAssentos,
+                                                       ConsMedio)
+    str(dados_prep_treino)
+    
+    
+    write.csv2(dados_prep_treino,file = 'dados/dados_prep_treino.csv')
+    
+    write.csv2(dados_prep_teste,file = 'dados/dados_prep_teste.csv')
     

@@ -10,27 +10,19 @@
     library(dplyr)
     library(caret)
     library(ggplot2)
+    library(forecast)
 
   # Carregando o Dataset
 
-    dados <- read.csv2('dados/dados_preparados.csv', header = TRUE) 
-    dim(dados)
-    summary(is.na(dados))
-    dados <- dados[-1]
-    str(dados)
-    View(dados)
-  
+    dados_treino <- read.csv2('dados/dados_prep_treino.csv', header = TRUE)[-1] 
+    str(dados_treino)
+    dados_teste <- read.csv2('dados/dados_prep_teste.csv', header = TRUE)[-1]
+    str(dados_teste)
+    
+    summary(is.na(dados_treino))
+    summary(is.na(dados_teste))
+    
   # Construindo nosso Modelo Base
-  
-      # Primeiramente vamos dividir nosso modelo em dados de treino e teste.
-      
-      separador <- createDataPartition(y = dados$ConsMedio, p = 0.75, 
-                                       list = FALSE)
-      dados_treino <- dados[separador,]
-      dados_teste <- dados[-separador, -5]
-      
-      View(dados_teste)
-      View(dados_treino)
   
       # Vamos utilizar a função lm() para construir nosso modelo base, sendo o 
       # algoritmo mais simples que conhecemos.
@@ -38,24 +30,37 @@
       ModeloBase <- lm(ConsMedio ~ ., dados_treino)
       summary(ModeloBase)      
       
-        # Nosso modelo Base possui em treinamento, um R² de 88,43% ajustado, o 
-        # que siginifica que conseguimos explicar o consumo com 88,43% de 
+        # Nosso modelo Base possui em treinamento, um R² de 92,67% ajustado, o 
+        # que siginifica que conseguimos explicar o consumo com 92,67% de 
         # variabilidade dessas variáveis.
+      
+      # Acurácia do Modelo Base de Treino
+        prev_treino_ModeloB <- predict(ModeloBase, dados_treino[-8])
+        accuracy(prev_treino_ModeloB, dados_treino$ConsMedio)
+        
+          # Acurácia de RMSE 1.407
 
   # Testando e Avaliando o Modelo
       
-      Previsao01 <- data.frame(Previsao = predict(ModeloBase, dados_teste))
+      Previsao01 <- predict(ModeloBase, dados_teste[-8])
       Previsao01 
+      
+      # Analisando a Acurárcia do Teste para o Modelo Base
+      
+        accuracy(Previsao01, dados_teste$ConsMedio)
+        
+          # Obtivemos uma acurácia relativamente mais alta que em treino
+          # no valor de RMSE 2.907. !! Ponto de Atenção
       
       # Analisando o resíduo do modelo
 
-        ConsumoTeste <- data.frame(Target = dados[-separador, 5])
+        ConsumoTeste <- dados_teste$ConsMedio
         
-        Res_ModeloBase <- data.frame(Residuo = ConsumoTeste$Target - Previsao01)
+        Res_ModeloBase <- ConsumoTeste - Previsao01
         
-        FitModeloBase <- data.frame(Target = ConsumoTeste$Target, 
-                               Previsao = Previsao01$Previsao, 
-                               Residuo = Res_ModeloBase$Previsao)
+        FitModeloBase <- data.frame(Target = ConsumoTeste, 
+                               Previsao = Previsao01, 
+                               Residuo = Res_ModeloBase)
         head(FitModeloBase)
         summary(FitModeloBase)
         
@@ -68,7 +73,7 @@
         ggplot(FitModeloBase, aes(x = Previsao, y = Target)) + camada1 + camada2 +
           ggtitle('Performance do Modelo Base') + annotate(geom = 'text', x = 17,
                                                            y = 25, 
-                                                           label = 'R² = 88,43%')
+                                                           label = 'R² = 92,67 RSME = 2.22%')
   
       # Percebemos que nosso modelo possui uma ótima acurácia e consegue explicar
       # de forma bastante precisa nossa Variável Target. Porem vamos tentar 
@@ -83,20 +88,24 @@
     ModeloV02 <- train(ConsMedio ~ ., data = dados_treino, method = 'lm')
     summary(ModeloV02)    
   
-  # Podemos reparar que obtivemos um R² de 88,43%, mesmo valor do modelo base.
+  # Podemos reparar que obtivemos um R² de 92,67%, mesmo valor do modelo base.
   # Vamos realizar a Previsão de teste e avaliar 
   # graficamente.
   
-    Previsao02 <- data.frame(Previsao = predict(ModeloV02, dados_teste))
+    Previsao02 <- predict(ModeloV02, dados_teste[-8])
     Previsao02 
+    
+    accuracy(Previsao02, dados_teste$ConsMedio)
+    
+      # Mesma acurácia do modelo base RMSE 2.907
     
     # Analisando o resíduo do modelo
     
-    Res_ModeloV02 <- data.frame(Residuo = ConsumoTeste$Target - Previsao02$Previsao)
+    Res_ModeloV02 <- ConsumoTeste - Previsao02
     
-    FitModeloV02 <- data.frame(Target = ConsumoTeste$Target, 
-                                Previsao = Previsao02$Previsao, 
-                                Residuo = Res_ModeloV02$Residuo)
+    FitModeloV02 <- data.frame(Target = ConsumoTeste, 
+                                Previsao = Previsao02, 
+                                Residuo = Res_ModeloV02)
     head(FitModeloV02)
     summary(FitModeloV02)
     
@@ -109,7 +118,7 @@
     ggplot(FitModeloV02, aes(x = Previsao, y = Target)) + camada1 + camada2 +
       ggtitle('Performance do Modelo V02') + annotate(geom = 'text', x = 17,
                                                        y = 25, 
-                                                       label = 'R² = 88,43%')
+                                                       label = 'R² = 92,67 RSME = 2.22%')
     
 # Construindo Modelo V03
 
@@ -121,19 +130,19 @@
       ModeloV03 <- train(ConsMedio ~ ., data = dados_treino, method = 'BstLm')
       ModeloV03
       
-      # Tivemos uma redução drástica do R², o que inviabiliza este modelo em 
-      # relação aos outros.
+      Previsao03 <- predict(ModeloV03, dados_teste[-8])
+      Previsao03   
       
-      Previsao03 <- data.frame(Previsao = predict(ModeloV03, dados_teste))
-      Previsao03       
+      # Acurácia de RMSE 3.34 e um R² de 65.12%, obtendo uma performance 
+      # inferior em R² e acurácia
       
       # Analisando o resíduo do modelo
       
-      Res_ModeloV03 <- data.frame(Residuo = ConsumoTeste$Target - Previsao03$Previsao)
+      Res_ModeloV03 <- ConsumoTeste - Previsao03
       
-      FitModeloV03 <- data.frame(Target = ConsumoTeste$Target,
-                                 Previsao = Previsao03$Previsao, 
-                                 Residuo = Res_ModeloV03$Residuo)
+      FitModeloV03 <- data.frame(Target = ConsumoTeste,
+                                 Previsao = Previsao03, 
+                                 Residuo = Res_ModeloV03)
       head(FitModeloV03)
       summary(FitModeloV03)
       
@@ -143,7 +152,7 @@
         geom_point(shape = 1) + 
         geom_smooth(method = lm, color = 'red', se = FALSE) +
         ggtitle('Performance do Modelo V03')+
-        annotate(geom = 'text', x = 17, y = 25, label = 'R² = 63,64%')
+        annotate(geom = 'text', x = 20, y = 25, label = 'R² = 65,12% RSME = 3.34')
   
   # Contruindo Modelo V04
   
@@ -154,20 +163,20 @@
       ModeloV04 <- train(ConsMedio ~ ., data = dados_treino, method = 'glmnet')
       ModeloV04
       
-      # Tivemos uma melhora drástica do R² em relação ao Modelo V03, porém ainda
+      # Tivemos uma piora drástica do R² em relação ao Modelo V03, porém ainda
       # assim nosso modelo base é melhor em relação a métrica de varibilidade
       # das variáveis em relação a variável resposta.
       
-      Previsao04 <- data.frame(Previsao = predict(ModeloV04, dados_teste))
+      Previsao04 <- predict(ModeloV04, dados_teste[-8])
       Previsao04       
       
       # Analisando o resíduo do modelo
       
-      Res_ModeloV04 <- data.frame(Residuo = ConsumoTeste$Target - Previsao04$Previsao)
+      Res_ModeloV04 <- ConsumoTeste - Previsao04
       
-      FitModeloV04 <- data.frame(Target = ConsumoTeste$Target,
-                                 Previsao = Previsao04$Previsao, 
-                                 Residuo = Res_ModeloV04$Residuo)
+      FitModeloV04 <- data.frame(Target = ConsumoTeste,
+                                 Previsao = Previsao04, 
+                                 Residuo = Res_ModeloV04)
       head(FitModeloV03)
       summary(FitModeloV04)
       
@@ -177,15 +186,15 @@
         geom_point(shape = 1) + 
         geom_smooth(method = lm, color = 'red', se = FALSE) +
         ggtitle('Performance do Modelo V04')+
-        annotate(geom = 'text', x = 17, y = 25, label = 'R² = 83%')
+        annotate(geom = 'text', x = 17, y = 25, label = 'R² = 84,39% RMSE = 1.66')
       
-# Portanto finalizamos nosso trabalho, disponibilizando o Modelo Base como 
+# Portanto finalizamos nosso trabalho, disponibilizando o Modelo V04 como 
 # apto a realizar novas previsões para a área de negócio.
 
 # Importante ressaltar que os novos dados a serem aplicados as variáveis do
 # modelo, necessariamente precisam ser tratados da mesma forma que fizemos
 # durante o processo de pre-processamento. Ou seja, sem outliers, sem dados NaN,
-# e normalizados para que possam ter a mesma escala.
+# e padronizados para que possam ter a mesma escala.
 
 # Concluimos o projeto com um relatório final deste trabalho e um resumo de
 # insight para a área de negócio.
